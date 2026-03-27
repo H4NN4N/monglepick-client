@@ -30,6 +30,8 @@ import axios from 'axios';
 import { getToken, setToken, removeToken, clearAll } from '../utils/storage';
 import { AUTH_ENDPOINTS } from '../constants/api';
 import { SERVICE_URLS } from './serviceUrls';
+/* Zustand 인증 스토어 — refresh 실패 시 인메모리 상태도 함께 초기화 */
+import useAuthStore from '../stores/useAuthStore';
 
 /* ══════════════════════════════════════════════════════════
  * 공통 유틸리티
@@ -268,9 +270,11 @@ backendApi.interceptors.request.use(
         config.headers.Authorization = `Bearer ${newToken}`;
       } catch (err) {
         processQueue(err, null);
+        /* 인증 정보 전체 초기화 (localStorage + Zustand 인메모리 상태) */
         clearAll();
-        window.location.href = '/login';
-        return Promise.reject(err);
+        useAuthStore.setState({ token: null, user: null });
+        /* 로그인 리다이렉트는 하지 않음 — 공개 페이지에서도 호출되므로
+           인증 필수 페이지는 PrivateRoute가 자동으로 /login 리다이렉트 처리 */
       } finally {
         isRefreshing = false;
       }
@@ -321,8 +325,11 @@ backendApi.interceptors.response.use(
         return backendApi(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
+        /* 인증 정보 전체 초기화 (localStorage + Zustand 인메모리 상태) */
         clearAll();
-        window.location.href = '/login';
+        useAuthStore.setState({ token: null, user: null });
+        /* 로그인 리다이렉트는 하지 않음 — 에러를 호출측에 전파하여
+           PrivateRoute 또는 개별 컴포넌트가 인증 필요 여부를 판단하도록 위임 */
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
